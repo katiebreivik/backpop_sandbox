@@ -11,35 +11,35 @@ from scipy.stats import multivariate_normal
 libc = cdll.LoadLibrary("./evolv2_merger.so")
 np.set_printoptions(suppress=True)
 
-def evolv2(m1, m2, tb, e, alpha, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim, qc_kstar2, qc_kstar3, Z):
-    m1 = m1
-    m2 = m2
-    
+def evolv2(m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim, qHG, qGB, logZ):
     m2, m1 = np.sort([m1,m2],axis=0)
-    tb = 10**tb
-    metallicity = 10**Z
+    tb = 10**logtb
+    metallicity = 10**logZ
     sigma = 0
 
     z = byref(c_double(metallicity))
     zpars = np.zeros(20).ctypes.data_as(POINTER(c_double))
-    alpha = byref(c_double(alpha))
     acc_lim = byref(c_double(acc_lim))
-    q3 = byref(c_double(qc_kstar2))
+    qkstar2 = byref(c_double(qHG))
     sigma = byref(c_double(0.0))
-    q4 = byref(c_double(qc_kstar3))
+    qkstar3 = byref(c_double(qGB))
     natal_kick = np.zeros((2,5))
-    natal_kick[0,0] = vk1
-    natal_kick[0,1] = phi1
-    natal_kick[0,2] = theta1
-    natal_kick[0,3] = omega1
-    natal_kick[0,4] = 3
-    natal_kick[1,0] = vk2
-    natal_kick[1,1] = phi2
-    natal_kick[1,2] = theta2
-    natal_kick[1,3] = omega2
-    natal_kick[1,4] = 3
+    #natal_kick[0,0] = vk1
+    #natal_kick[0,1] = phi1
+    #natal_kick[0,2] = theta1
+    #natal_kick[0,3] = omega1
+    #natal_kick[0,4] = 3
+    #natal_kick[1,0] = vk2
+    #natal_kick[1,1] = phi2
+    #natal_kick[1,2] = theta2
+    #natal_kick[1,3] = omega2
+    #natal_kick[1,4] = 3
     natal_kick = natal_kick.T.flatten().ctypes.data_as(POINTER(c_double))
-    libc.evolv2_global_(z,zpars,alpha,acc_lim,q3,q4,natal_kick)
+    alpha = np.zeros(2)
+    alpha[0] = alpha_1
+    alpha[1] = alpha_2
+    alpha = alpha.flatten().ctypes.data_as(POINTER(c_double))
+    libc.evolv2_global_(z,zpars,acc_lim,alpha,qkstar2,qkstar3,natal_kick)
 
     mass = np.array([m1,m2]).ctypes.data_as(POINTER(c_double))
     mass0 = np.array([m1,m2]).ctypes.data_as(POINTER(c_double))
@@ -84,15 +84,16 @@ def evolv2(m1, m2, tb, e, alpha, vk1, theta1, phi1, omega1, vk2, theta2, phi2, o
 #Eccentricity: 0.45  +/- 0.01 
 #MBH: 9.80  +/- 0.20
 #Mstar: 0.93 +/- 0.05
-mean = np.array([1.46, 1.27])
-cov = np.array([[0.12**2, 0,], [0, 0.09**2]])
+mean = np.array([36.0, 29.0])
+cov = np.array([[5**2, 0,], [0, 5**2]])
 rv = multivariate_normal(mean, cov)
 #m1, m2, tb, e, alpha, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim, qc_kstar2, qc_kstar3, Z
 m1lo = 5.0
 m2lo = 5.0
 tblo = 5.0
 elo = 0.0
-alphalo = 0.1
+alphalo_1 = 0.1
+alphalo_2 = 0.1
 vklo = 0.0
 thetalo = 0.0
 philo = -90.0
@@ -102,11 +103,12 @@ qc_kstar2lo = 0.5
 qc_kstar3lo = 0.5
 Zlo = 0.0001
 
-m1hi = 60.0
-m2hi = 60.0
+m1hi = 150.0
+m2hi = 150.0
 tbhi = 5000.0
 ehi = 0.9
-alphahi = 20.0
+alphahi_1 = 20.0
+alphahi_2 = 20.0
 vkhi = 300.0
 thetahi = 360.0
 phihi = 90.0
@@ -116,8 +118,12 @@ qc_kstar2hi = 10.0
 qc_kstar3hi = 10.0
 Zhi = 0.03
 
-lower_bound = np.array([m1lo, m2lo, np.log10(tblo), elo, alphalo, vklo, thetalo, philo, omegalo, vklo, thetalo, philo, omegalo, acc_limlo, qc_kstar2lo, qc_kstar3lo, np.log10(Zlo)])
-upper_bound = np.array([m1hi, m2hi, np.log10(tbhi), ehi, alphahi, vkhi, thetahi, phihi, omegahi, vkhi, thetahi, phihi, omegahi, acc_limhi, qc_kstar2hi, qc_kstar3hi, np.log10(Zhi)])
+#m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim, logZ
+lower_bound = np.array([m1lo, m2lo, np.log10(tblo), elo, alphalo_1, alphalo_2, vklo, thetalo, philo, omegalo, vklo, thetalo, philo, omegalo, acc_limlo, qc_kstar2lo, qc_kstar3lo, np.log10(Zlo)])
+upper_bound = np.array([m1hi, m2hi, np.log10(tbhi), ehi, alphahi_1, alphahi_2, vkhi, thetahi, phihi, omegahi, vkhi, thetahi, phihi, omegahi, acc_limhi, qc_kstar2hi, qc_kstar3hi, np.log10(Zhi)])
+
+lower_bound[5] = lower_bound[4]
+upper_bound[5] = upper_bound[4]
 
 def likelihood(coord):
     for i in range(len(coord)):
@@ -125,24 +131,21 @@ def likelihood(coord):
             return -np.inf
     result = evolv2(*coord)
     gw_coord = np.array([result[1][0],result[1][1]])
+    if np.any(gw_coord) == 0.0: return -np.inf
     return rv.logpdf(gw_coord) 
-
-
-#result = evolv2(25.0, 8.0, 2500.0, 0.5, 1.0, 30.0, thetahi, phihi, omegahi, vkhi, thetahi, phihi, omegahi, acc_limhi, 
-#                qc_kstar2hi, qc_kstar3hi, np.log10(Zhi))
-#
-#print(np.round(result[3][:,[0,1,2,3,4,6,10]], 2))
-#
 
 n_dim = len(lower_bound)
 n_walkers = 1024
 p0 = np.random.uniform(lower_bound, upper_bound, size=(n_walkers, len(lower_bound)))
-p0 = p0*np.random.normal(1.0,0.01,size=(n_walkers,n_dim))
-n_steps = 100
-
-#with Pool() as pool:
+#p0 = p0*np.random.normal(1.0,0.01,size=(n_walkers,n_dim))
+n_steps = 1000
 
 sampler = emcee.EnsembleSampler(n_walkers, n_dim, likelihood)#, pool=pool)
 sampler.run_mcmc(p0, n_steps, progress=True)
 
-np.savez('./gw170817_test',nwalkers=n_walkers,n_steps=n_steps,chain=sampler.chain[:,::10])
+#for p in p0:
+#print(p)
+#_ = likelihood(p)
+
+
+np.savez('./gw150914_alpha_test',nwalkers=n_walkers,n_steps=n_steps,chain=sampler.chain)

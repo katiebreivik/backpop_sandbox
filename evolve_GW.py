@@ -11,7 +11,7 @@ from scipy.stats import multivariate_normal
 libc = cdll.LoadLibrary("./evolv2_merger.so")
 np.set_printoptions(suppress=True)
 
-def evolv2(m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim, qHG, qGB, logZ):
+def evolv2(m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim1, acc_lim2, qHG, qGB, logZ):
     m2, m1 = np.sort([m1,m2],axis=0)
     tb = 10**logtb
     metallicity = 10**logZ
@@ -19,7 +19,7 @@ def evolv2(m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, t
 
     z = byref(c_double(metallicity))
     zpars = np.zeros(20).ctypes.data_as(POINTER(c_double))
-    acc_lim = byref(c_double(acc_lim))
+    acc_lim = acc_lim.flatten().ctypes.data_as(POINTER(c_double))
     qkstar2 = byref(c_double(qHG))
     sigma = byref(c_double(0.0))
     qkstar3 = byref(c_double(qGB))
@@ -39,6 +39,7 @@ def evolv2(m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, t
     alpha[0] = alpha_1
     alpha[1] = alpha_2
     alpha = alpha.flatten().ctypes.data_as(POINTER(c_double))
+    
     libc.evolv2_global_(z,zpars,acc_lim,alpha,qkstar2,qkstar3,natal_kick)
 
     mass = np.array([m1,m2]).ctypes.data_as(POINTER(c_double))
@@ -70,13 +71,14 @@ def evolv2(m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, t
     m_merge = np.array([0.0,0.0])
     bpp_out=np.zeros([1000,43]).flatten().ctypes.data_as(POINTER(c_double))
     kstar = np.array([1,1]).ctypes.data_as(POINTER(c_double))
+    
     libc.evolv2_(kstar,mass,tb,ecc,z,tphysf,
     dtp,mass0,rad,lumin,massc,radc,
     menv,renv,ospin,B_0,bacc,tacc,epoch,tms,
     bhspin,tphys,zpars,bkick,kick_info,
     bpp_index_out,bcm_index_out,kick_info_out,
     t_merge,m_merge.ctypes.data_as(POINTER(c_double)),bpp_out)
-    
+    bpp = np.hstack((bpp, np.ones((bpp.shape[0], 1))*np.random.uniform(0, 1000000000))
     bpp = bpp_out._arr.reshape(43,1000)[:,0:bpp_index_out._obj.value].T
     return t_merge._obj.value,np.sort(m_merge)[::-1],kick_info_out._arr.reshape(17,2).T,bpp
 
@@ -84,8 +86,8 @@ def evolv2(m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, t
 #Eccentricity: 0.45  +/- 0.01 
 #MBH: 9.80  +/- 0.20
 #Mstar: 0.93 +/- 0.05
-mean = np.array([36.0, 29.0])
-cov = np.array([[5**2, 0,], [0, 5**2]])
+mean = np.array([24.0, 2.6])
+cov = np.array([[1.5**2, 0,], [0, 0.2**2]])
 rv = multivariate_normal(mean, cov)
 #m1, m2, tb, e, alpha, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim, qc_kstar2, qc_kstar3, Z
 m1lo = 5.0
@@ -98,7 +100,8 @@ vklo = 0.0
 thetalo = 0.0
 philo = -90.0
 omegalo = 0.0
-acc_limlo = 0.0
+acc_lim_1lo = 0.0
+acc_lim_2lo = 0.0
 qc_kstar2lo = 0.5
 qc_kstar3lo = 0.5
 Zlo = 0.0001
@@ -113,17 +116,19 @@ vkhi = 300.0
 thetahi = 360.0
 phihi = 90.0
 omegahi = 360
-acc_limhi = 1.0
+acc_lim_1hi = 0.0
+acc_lim_2hi = 0.0
 qc_kstar2hi = 10.0
 qc_kstar3hi = 10.0
 Zhi = 0.03
 
 #m1, m2, logtb, e, alpha_1, alpha_2, vk1, theta1, phi1, omega1, vk2, theta2, phi2, omega2, acc_lim, logZ
-lower_bound = np.array([m1lo, m2lo, np.log10(tblo), elo, alphalo_1, alphalo_2, vklo, thetalo, philo, omegalo, vklo, thetalo, philo, omegalo, acc_limlo, qc_kstar2lo, qc_kstar3lo, np.log10(Zlo)])
-upper_bound = np.array([m1hi, m2hi, np.log10(tbhi), ehi, alphahi_1, alphahi_2, vkhi, thetahi, phihi, omegahi, vkhi, thetahi, phihi, omegahi, acc_limhi, qc_kstar2hi, qc_kstar3hi, np.log10(Zhi)])
+lower_bound = np.array([m1lo, m2lo, np.log10(tblo), elo, alphalo_1, alphalo_2, vklo, thetalo, philo, omegalo, vklo, thetalo, philo, omegalo, acc_lim_1lo, acc_lim_2lo, qc_kstar2lo, qc_kstar3lo, np.log10(Zlo)])
+upper_bound = np.array([m1hi, m2hi, np.log10(tbhi), ehi, alphahi_1, alphahi_2, vkhi, thetahi, phihi, omegahi, vkhi, thetahi, phihi, omegahi, acc_lim_1hi, acc_lim_2hi, qc_kstar2hi, qc_kstar3hi, np.log10(Zhi)])
 
 lower_bound[5] = lower_bound[4]
 upper_bound[5] = upper_bound[4]
+
 
 def likelihood(coord):
     for i in range(len(coord)):
@@ -137,7 +142,6 @@ def likelihood(coord):
 n_dim = len(lower_bound)
 n_walkers = 1024
 p0 = np.random.uniform(lower_bound, upper_bound, size=(n_walkers, len(lower_bound)))
-#p0 = p0*np.random.normal(1.0,0.01,size=(n_walkers,n_dim))
 n_steps = 1000
 
 sampler = emcee.EnsembleSampler(n_walkers, n_dim, likelihood)#, pool=pool)
